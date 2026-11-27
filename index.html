@@ -3248,7 +3248,7 @@ details.block>summary{font-size:1rem;padding:2px 0}
     lb.addEventListener('click',function(e){if(e.target.closest('a'))return;lb.hidden=true});
     document.addEventListener('click',function(e){var im=e.target.closest('.pingal img');
       if(im){lb.querySelector('img').src=im.getAttribute('data-full')||im.src;var sm=lb.querySelector('small'),au=im.getAttribute('data-au');
-        if(au){var ut='?utm_source=domera&utm_medium=referral';sm.innerHTML='Фото: <a target="_blank" rel="noopener" href="'+esc(im.getAttribute('data-aul')+ut)+'">'+esc(au)+'</a> на <a target="_blank" rel="noopener" href="https://unsplash.com/'+ut+'">Unsplash</a>'}
+        if(au){var isPb=im.getAttribute('data-src')==='Pixabay',ut=isPb?'':'?utm_source=domera&utm_medium=referral';sm.innerHTML='Фото: <a target="_blank" rel="noopener" href="'+esc(im.getAttribute('data-aul')+ut)+'">'+esc(au)+'</a> на <a target="_blank" rel="noopener" href="'+(isPb?'https://pixabay.com/':'https://unsplash.com/'+ut)+'">'+(isPb?'Pixabay':'Unsplash')+'</a>'}
         else sm.textContent=im.getAttribute('data-cap')||'';lb.hidden=false}});
     var cache={};
     function tmo(ms){var c=new AbortController();setTimeout(function(){c.abort()},ms);return c.signal}
@@ -3267,8 +3267,19 @@ details.block>summary{font-size:1rem;padding:2px 0}
       var j=await r.json(),res=(j.results||[]).map(function(x){return {t:x.urls&&x.urls.small,f:x.urls&&(x.urls.regular||x.urls.small),c:(x.alt_description||'Интерьер'),au:x.user&&x.user.name||'',aul:x.user&&x.user.links&&x.user.links.html||'https://unsplash.com/'}}).filter(function(x){return x.t});
       try{localStorage.setItem(k,JSON.stringify({t:Date.now(),r:res}))}catch(e){}
       return res}
+    /* Pixabay: второй источник; результаты храним сутки, как требует Pixabay */
+    var PIXABAY_KEY='58748890-30f07e49a9d24d5a584b880d6',pbOff=0;
+    async function pb(q){if(!PIXABAY_KEY||Date.now()<pbOff)return [];
+      var k='pb:'+q;try{var c=JSON.parse(localStorage.getItem(k)||'null');if(c&&Date.now()-c.t<864e5)return c.r}catch(e){}
+      var r=await fetch('https://pixabay.com/api/?image_type=photo&safesearch=true&per_page=12&key='+encodeURIComponent(PIXABAY_KEY)+'&q='+encodeURIComponent(q.slice(0,100)),{signal:tmo(9000)});
+      if(r.status===429||r.status===400||r.status===401){pbOff=Date.now()+15*60e3;return []}
+      if(!r.ok)return [];
+      var j=await r.json(),res=(j.hits||[]).map(function(x){return {t:x.webformatURL,f:x.largeImageURL||x.webformatURL,c:(x.tags||'Интерьер'),au:x.user||'Pixabay',aul:x.pageURL||'https://pixabay.com/',src:'Pixabay'}}).filter(function(x){return x.t});
+      try{localStorage.setItem(k,JSON.stringify({t:Date.now(),r:res}))}catch(e){}
+      return res}
     async function load(q){if(cache[q])return cache[q];var res=[];
       try{res=await us(q+' interior')}catch(e){}
+      if(res.length<4){try{res=res.concat(await pb(q+' interior'))}catch(e){}}
       if(res.length<4){try{res=res.concat(await ov(q+' interior'))}catch(e){}}
       if(res.length<4){try{res=res.concat(await wm(q+' interior'))}catch(e){}}
       cache[q]=res.slice(0,10);return cache[q]}
@@ -3282,7 +3293,7 @@ details.block>summary{font-size:1rem;padding:2px 0}
         if(card){var box=card.parentNode;card.remove();if(box&&!box.querySelector('.pincard')){var st=$('ref-var-st');if(st)st.textContent='Фото сейчас недоступны: нет связи с фотобанком. Попробуйте позже.'}}
         return}
       if(g.id==='insp-g')$('insp').hidden=false;
-      g.innerHTML=res.map(function(x){return x.au?'<figure class="gfig"><img loading="lazy" src="'+esc(x.t)+'" data-full="'+esc(x.f)+'" data-cap="'+esc(x.c)+'" data-au="'+esc(x.au)+'" data-aul="'+esc(x.aul)+'" alt="'+esc(x.c)+'" onerror="this.parentNode.remove()"><figcaption>'+esc(x.au)+' · Unsplash</figcaption></figure>':'<img loading="lazy" referrerpolicy="no-referrer" src="'+esc(x.t)+'" data-full="'+esc(x.f)+'" data-cap="'+esc(x.c)+'" alt="Интерьер" onerror="this.remove()">'}).join('');
+      g.innerHTML=res.map(function(x){return x.au?'<figure class="gfig"><img loading="lazy" src="'+esc(x.t)+'" data-full="'+esc(x.f)+'" data-cap="'+esc(x.c)+'" data-au="'+esc(x.au)+'" data-aul="'+esc(x.aul)+'" data-src="'+(x.src||'Unsplash')+'" alt="'+esc(x.c)+'" onerror="this.parentNode.remove()"><figcaption>'+esc(x.au)+' · '+(x.src||'Unsplash')+'</figcaption></figure>':'<img loading="lazy" referrerpolicy="no-referrer" src="'+esc(x.t)+'" data-full="'+esc(x.f)+'" data-cap="'+esc(x.c)+'" alt="Интерьер" onerror="this.remove()">'}).join('');
     }
     var io='IntersectionObserver' in window?new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){io.unobserve(e.target);fill(e.target)}})},{rootMargin:'200px'}):null;
     function scan(){[].forEach.call(document.querySelectorAll('.pingal[data-q]:not([data-on]):not([data-w])'),function(g){if(g.closest('[hidden]'))return;g.setAttribute('data-w','1');if(io)io.observe(g);else fill(g)})}
